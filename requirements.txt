@@ -1,6 +1,5 @@
 Flask==2.3.2
 flask-cors==4.0.0
-openai==1.35.3
 google-auth==2.22.0
 google-auth-httplib2==0.1.0
 google-api-python-client==2.94.0
