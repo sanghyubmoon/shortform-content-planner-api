@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import openai
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import os
@@ -11,15 +10,9 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Bubble integration
 
-# API Keys from environment variables
-openai.api_key = os.environ.get('OPENAI_API_KEY')
-GOOGLE_CREDENTIALS_FILE = 'google-credentials.json'
-
 class ContentPlannerAPI:
     def __init__(self):
-        self.openai_client = openai.OpenAI(api_key=openai.api_key)
-        
-        # Try multiple methods to load Google credentials
+        # Initialize Google services only
         self.docs_service = None
         self.drive_service = None
         
@@ -59,10 +52,10 @@ class ContentPlannerAPI:
                 print(f"Error loading Google credentials from JSON env: {e}")
                 
         # Method 3: Try file if it exists
-        elif os.path.exists(GOOGLE_CREDENTIALS_FILE):
+        elif os.path.exists('google-credentials.json'):
             try:
                 self.google_creds = service_account.Credentials.from_service_account_file(
-                    GOOGLE_CREDENTIALS_FILE,
+                    'google-credentials.json',
                     scopes=['https://www.googleapis.com/auth/documents',
                            'https://www.googleapis.com/auth/drive']
                 )
@@ -73,41 +66,6 @@ class ContentPlannerAPI:
                 print(f"Error loading Google credentials from file: {e}")
         else:
             print("Warning: No Google credentials found")
-    
-    def generate_content_plan(self, topic, duration):
-        """Generate content plan using AI"""
-        prompt = f"""
-        Create a content plan for a short-form video.
-        
-        Topic: {topic}
-        Duration: {duration} seconds
-        
-        Please respond in JSON format with the following structure:
-        {{
-            "title": "Video title",
-            "topic": "{topic}",
-            "duration": {duration},
-            "key_message": "Main message of the video",
-            "scenes": [
-                {{
-                    "scene_number": 1,
-                    "duration": 10,
-                    "subtitle": "Text for subtitle",
-                    "narration": "Narration script",
-                    "visual_description": "Description of visuals or reference images"
-                }}
-            ],
-            "conclusion": "Closing message"
-        }}
-        """
-        
-        response = self.openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"}
-        )
-        
-        return json.loads(response.choices[0].message.content)
 
 planner = ContentPlannerAPI()
 
@@ -120,39 +78,9 @@ def health_check():
         "google_services_initialized": bool(planner.docs_service and planner.drive_service)
     })
 
-@app.route('/generate-plan', methods=['POST'])
-def generate_plan():
-    """Generate content plan endpoint"""
-    try:
-        # Validate API key
-        api_key = request.headers.get('X-API-Key')
-        if api_key != os.environ.get('BUBBLE_API_KEY'):
-            return jsonify({'success': False, 'error': 'Invalid API key'}), 401
-        
-        data = request.json
-        topic = data.get('topic')
-        duration = data.get('duration', 60)
-        
-        if not topic:
-            return jsonify({'success': False, 'error': 'Topic is required'}), 400
-        
-        # Generate content plan using AI
-        content_plan = planner.generate_content_plan(topic, duration)
-        
-        return jsonify({
-            'success': True,
-            'content_plan': content_plan
-        })
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
 @app.route('/create-google-doc', methods=['POST'])
 def create_google_doc():
-    """Create Google Doc and grant permissions"""
+    """Create Google Doc from Bubble-generated content and grant permissions"""
     try:
         # Validate API key
         api_key = request.headers.get('X-API-Key')
