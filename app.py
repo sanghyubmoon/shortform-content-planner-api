@@ -5,6 +5,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import os
 import json
+import base64
 from datetime import datetime
 
 app = Flask(__name__)
@@ -18,19 +19,60 @@ class ContentPlannerAPI:
     def __init__(self):
         self.openai_client = openai.OpenAI(api_key=openai.api_key)
         
-        # Initialize Google services only if credentials file exists
-        if os.path.exists(GOOGLE_CREDENTIALS_FILE):
-            self.google_creds = service_account.Credentials.from_service_account_file(
-                GOOGLE_CREDENTIALS_FILE,
-                scopes=['https://www.googleapis.com/auth/documents',
-                       'https://www.googleapis.com/auth/drive']
-            )
-            self.docs_service = build('docs', 'v1', credentials=self.google_creds)
-            self.drive_service = build('drive', 'v3', credentials=self.google_creds)
+        # Try multiple methods to load Google credentials
+        self.docs_service = None
+        self.drive_service = None
+        
+        # Method 1: Try environment variable with base64 encoded JSON
+        google_creds_base64 = os.environ.get('GOOGLE_CREDENTIALS_JSON_BASE64')
+        if google_creds_base64:
+            try:
+                # Decode base64 and parse JSON
+                google_creds_json = base64.b64decode(google_creds_base64).decode('utf-8')
+                google_creds_dict = json.loads(google_creds_json)
+                
+                # Create credentials from dictionary
+                self.google_creds = service_account.Credentials.from_service_account_info(
+                    google_creds_dict,
+                    scopes=['https://www.googleapis.com/auth/documents',
+                           'https://www.googleapis.com/auth/drive']
+                )
+                self.docs_service = build('docs', 'v1', credentials=self.google_creds)
+                self.drive_service = build('drive', 'v3', credentials=self.google_creds)
+                print("Successfully initialized Google services from environment variable")
+            except Exception as e:
+                print(f"Error loading Google credentials from environment: {e}")
+        
+        # Method 2: Try raw JSON from environment variable
+        elif os.environ.get('GOOGLE_CREDENTIALS_JSON'):
+            try:
+                google_creds_dict = json.loads(os.environ.get('GOOGLE_CREDENTIALS_JSON'))
+                self.google_creds = service_account.Credentials.from_service_account_info(
+                    google_creds_dict,
+                    scopes=['https://www.googleapis.com/auth/documents',
+                           'https://www.googleapis.com/auth/drive']
+                )
+                self.docs_service = build('docs', 'v1', credentials=self.google_creds)
+                self.drive_service = build('drive', 'v3', credentials=self.google_creds)
+                print("Successfully initialized Google services from JSON environment variable")
+            except Exception as e:
+                print(f"Error loading Google credentials from JSON env: {e}")
+                
+        # Method 3: Try file if it exists
+        elif os.path.exists(GOOGLE_CREDENTIALS_FILE):
+            try:
+                self.google_creds = service_account.Credentials.from_service_account_file(
+                    GOOGLE_CREDENTIALS_FILE,
+                    scopes=['https://www.googleapis.com/auth/documents',
+                           'https://www.googleapis.com/auth/drive']
+                )
+                self.docs_service = build('docs', 'v1', credentials=self.google_creds)
+                self.drive_service = build('drive', 'v3', credentials=self.google_creds)
+                print("Successfully initialized Google services from file")
+            except Exception as e:
+                print(f"Error loading Google credentials from file: {e}")
         else:
-            print("Warning: Google credentials file not found")
-            self.docs_service = None
-            self.drive_service = None
+            print("Warning: No Google credentials found")
     
     def generate_content_plan(self, topic, duration):
         """Generate content plan using AI"""
@@ -72,7 +114,11 @@ planner = ContentPlannerAPI()
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
+    return jsonify({
+        "status": "healthy", 
+        "timestamp": datetime.now().isoformat(),
+        "google_services_initialized": bool(planner.docs_service and planner.drive_service)
+    })
 
 @app.route('/generate-plan', methods=['POST'])
 def generate_plan():
