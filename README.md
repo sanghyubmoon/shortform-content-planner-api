@@ -1,13 +1,17 @@
 # Short-form Content Planner API
 
-AI-powered backend API for generating short-form content plans with Google Docs integration.
+Backend API for converting content plans to Google Docs with automatic permission management.
 
 ## Features
 
-- Generate content plans using OpenAI GPT-4
-- Create Google Docs automatically
-- Grant editor permissions to specified users
+- Create Google Docs from content plan data
+- Automatically grant editor permissions to specified users
 - Integration with Bubble.io for frontend
+
+## Architecture
+
+1. **Bubble Frontend**: Generates content plans using OpenAI API
+2. **This Backend**: Converts content to Google Docs and manages permissions
 
 ## Setup
 
@@ -34,7 +38,6 @@ pip install -r requirements.txt
    ```
 
 2. Fill in your API keys in `.env`:
-   - `OPENAI_API_KEY`: Your OpenAI API key
    - `BUBBLE_API_KEY`: API key for authenticating Bubble requests
 
 3. Set up Google Cloud credentials:
@@ -53,18 +56,18 @@ The API will be available at `http://localhost:5000`
 
 ## API Endpoints
 
-### Generate Content Plan
+### Health Check
 
 ```
-POST /generate-plan
-Headers:
-  X-API-Key: your_bubble_api_key
-  Content-Type: application/json
+GET /health
+```
 
-Body:
+Response:
+```json
 {
-  "topic": "AI trends in 2025",
-  "duration": 60
+  "status": "healthy",
+  "timestamp": "2025-05-14T09:00:00",
+  "google_services_initialized": true
 }
 ```
 
@@ -78,8 +81,32 @@ Headers:
 
 Body:
 {
-  "content_plan": { ... },
+  "content_plan": {
+    "title": "Video Title",
+    "topic": "AI Trends",
+    "duration": 60,
+    "key_message": "Main message",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "duration": 10,
+        "subtitle": "Opening text",
+        "narration": "Voice over script",
+        "visual_description": "Visual references"
+      }
+    ],
+    "conclusion": "Closing message"
+  },
   "user_email": "user@gmail.com"
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "document_id": "1234567890",
+  "share_link": "https://docs.google.com/document/d/1234567890/edit"
 }
 ```
 
@@ -101,7 +128,7 @@ Enable these APIs in your Google Cloud project:
 
 ## Deployment
 
-### Option 1: Deploy to Railway (Recommended)
+### Deploy to Railway (Recommended)
 
 1. Fork/Import this repository to your GitHub account
 2. Go to [Railway](https://railway.app)
@@ -116,8 +143,7 @@ Enable these APIs in your Google Cloud project:
 3. Add the following variables:
 
 ```bash
-# Required API Keys
-OPENAI_API_KEY=sk-your-openai-key-here
+# Required API Key
 BUBBLE_API_KEY=your-bubble-api-key-here
 
 # Google Credentials - Option 1: Base64 encoded (Recommended)
@@ -139,38 +165,7 @@ base64 -i google-credentials.json | tr -d '\n'
 
 Then copy the output and paste it as the value for `GOOGLE_CREDENTIALS_JSON_BASE64`.
 
-### Option 2: Deploy to Render.com
-
-1. Create a new Web Service on Render
-2. Connect this GitHub repository
-3. Add environment variables:
-   - `OPENAI_API_KEY`
-   - `BUBBLE_API_KEY`
-4. Add Secret File:
-   - Filename: `google-credentials.json`
-   - Content: Your service account JSON
-5. Deploy
-
-### Option 3: Deploy to Google Cloud Run
-
-```bash
-# Store credentials in Secret Manager
-gcloud secrets create google-creds --data-file=google-credentials.json
-
-# Build and push container
-gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/content-planner-api
-
-# Deploy to Cloud Run with secrets
-gcloud run deploy content-planner-api \
-  --image gcr.io/YOUR_PROJECT_ID/content-planner-api \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --update-secrets=/app/google-credentials.json=google-creds:latest \
-  --set-env-vars="OPENAI_API_KEY=your_key,BUBBLE_API_KEY=your_key"
-```
-
-## Integration with Bubble
+### Integration with Bubble
 
 1. In Bubble, add API Connector plugin
 2. Create new API with base URL of your deployed service
@@ -178,8 +173,18 @@ gcloud run deploy content-planner-api \
    ```
    X-API-Key: your_bubble_api_key
    ```
-4. Add the two endpoints with appropriate parameters
-5. Use in Bubble workflows
+4. Add the endpoint:
+   - Name: Create Google Doc
+   - Method: POST
+   - URL: /create-google-doc
+5. Use in Bubble workflows after generating content with OpenAI
+
+## Bubble Workflow Example
+
+1. User inputs topic and email
+2. Bubble calls OpenAI API to generate content plan
+3. Bubble calls this backend API to create Google Doc
+4. Backend returns link to shared document
 
 ## Troubleshooting
 
