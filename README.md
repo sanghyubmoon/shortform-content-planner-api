@@ -101,7 +101,45 @@ Enable these APIs in your Google Cloud project:
 
 ## Deployment
 
-### Option 1: Deploy to Render.com
+### Option 1: Deploy to Railway (Recommended)
+
+1. Fork/Import this repository to your GitHub account
+2. Go to [Railway](https://railway.app)
+3. Click "New Project" → "Deploy from GitHub repo"
+4. Select your forked repository
+5. Railway will automatically detect the app
+
+#### Setting Environment Variables in Railway:
+
+1. Click on your deployed service
+2. Go to "Variables" tab
+3. Add the following variables:
+
+```bash
+# Required API Keys
+OPENAI_API_KEY=sk-your-openai-key-here
+BUBBLE_API_KEY=your-bubble-api-key-here
+
+# Google Credentials - Option 1: Base64 encoded (Recommended)
+GOOGLE_CREDENTIALS_JSON_BASE64=<your-base64-encoded-json>
+
+# OR Option 2: Raw JSON
+GOOGLE_CREDENTIALS_JSON={"type":"service_account","project_id":"..."}
+```
+
+#### How to encode your Google credentials for Railway:
+
+```bash
+# On Mac/Linux:
+base64 -i google-credentials.json | tr -d '\n'
+
+# On Windows (PowerShell):
+[Convert]::ToBase64String([System.IO.File]::ReadAllBytes("google-credentials.json"))
+```
+
+Then copy the output and paste it as the value for `GOOGLE_CREDENTIALS_JSON_BASE64`.
+
+### Option 2: Deploy to Render.com
 
 1. Create a new Web Service on Render
 2. Connect this GitHub repository
@@ -113,7 +151,7 @@ Enable these APIs in your Google Cloud project:
    - Content: Your service account JSON
 5. Deploy
 
-### Option 2: Deploy to Google Cloud Run
+### Option 3: Deploy to Google Cloud Run
 
 ```bash
 # Store credentials in Secret Manager
@@ -132,20 +170,6 @@ gcloud run deploy content-planner-api \
   --set-env-vars="OPENAI_API_KEY=your_key,BUBBLE_API_KEY=your_key"
 ```
 
-### Option 3: Deploy to Railway
-
-1. Connect your GitHub repository to Railway
-2. Add environment variables:
-   - `OPENAI_API_KEY`
-   - `BUBBLE_API_KEY`
-3. Upload `google-credentials.json` via Railway CLI:
-   ```bash
-   railway link
-   railway variables set GOOGLE_APPLICATION_CREDENTIALS=google-credentials.json
-   railway up google-credentials.json
-   ```
-4. Deploy
-
 ## Integration with Bubble
 
 1. In Bubble, add API Connector plugin
@@ -156,6 +180,26 @@ gcloud run deploy content-planner-api \
    ```
 4. Add the two endpoints with appropriate parameters
 5. Use in Bubble workflows
+
+## Troubleshooting
+
+### Google Services Not Configured Error
+
+If you get a "Google services not configured" error, check:
+
+1. Your Google credentials are properly set in environment variables
+2. The JSON format is valid
+3. If using base64 encoding, ensure it's properly encoded without line breaks
+4. Check service logs for any credential loading errors
+
+### Health Check
+
+You can verify your deployment by visiting:
+```
+https://your-deployed-url.com/health
+```
+
+This will show if Google services are properly initialized.
 
 ## Security Notes
 
